@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>André e Sheilla</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f6f1ea;
+    --plum:#3a2230;
+    --rose:#b46a6a;
+    --rose-soft:#e3c9c2;
+    --gold:#a9824f;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:var(--cream);
+    color:var(--plum);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+  }
+  header{
+    text-align:center;
+    padding:6rem 1.5rem 3rem;
+  }
+  .eyebrow{
+    font-size:.75rem;
+    letter-spacing:.35em;
+    text-transform:uppercase;
+    color:var(--rose);
+    margin-bottom:1.2rem;
+  }
+  h1{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:600;
+    font-size:clamp(2.8rem, 8vw, 5.5rem);
+    line-height:1;
+  }
+  h1 .e{
+    font-style:italic;
+    font-weight:400;
+    color:var(--rose);
+    font-size:.55em;
+    display:inline-block;
+    margin:0 .15em;
+  }
+  .sub{
+    margin-top:1rem;
+    font-size:.95rem;
+    color:#7a6a72;
+    font-style:italic;
+  }
+  .gallery{
+    max-width:1100px;
+    margin:0 auto;
+    padding:0 1.5rem 6rem;
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));
+    gap:1.4rem;
+  }
+  .frame{
+    position:relative;
+    aspect-ratio:4/5;
+    background:#fff;
+    padding:.6rem .6rem 2.4rem;
+    box-shadow:0 10px 25px rgba(58,34,48,.12);
+    transition:transform .35s ease, box-shadow .35s ease;
+    cursor:pointer;
+  }
+  .frame:nth-child(odd){ transform:rotate(-1.4deg); }
+  .frame:nth-child(even){ transform:rotate(1.6deg); }
+  .frame:hover{
+    transform:rotate(0deg) translateY(-6px) scale(1.02);
+    box-shadow:0 18px 35px rgba(58,34,48,.2);
+    z-index:2;
+  }
+  .frame img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    background:var(--rose-soft);
+  }
+  .frame .cap{
+    position:absolute;
+    bottom:.7rem;
+    left:0;
+    right:0;
+    text-align:center;
+    font-family:'Cormorant Garamond', serif;
+    font-style:italic;
+    font-size:.95rem;
+    color:#8a7a82;
+  }
+  footer{
+    text-align:center;
+    padding:2rem 1.5rem 4rem;
+    font-size:.78rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#b9a6ad;
+  }
+
+  /* Enhancer section */
+  .enhancer{
+    max-width:1100px;
+    margin:0 auto;
+    padding:1rem 1.5rem 5rem;
+  }
+  .enhancer-card{
+    background:#fff;
+    border:1px solid var(--rose-soft);
+    border-radius:4px;
+    padding:2.5rem 2rem;
+    text-align:center;
+  }
+  .enhancer h2{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:600;
+    font-size:2rem;
+    margin-bottom:.4rem;
+  }
+  .enhancer p.desc{
+    font-size:.85rem;
+    color:#8a7a82;
+    margin-bottom:1.6rem;
+  }
+  .upload-zone{
+    border:1.5px dashed var(--rose);
+    border-radius:4px;
+    padding:2.2rem 1rem;
+    cursor:pointer;
+    color:var(--rose);
+    font-size:.9rem;
+    transition:background .2s ease;
+    margin-bottom:1.6rem;
+  }
+  .upload-zone:hover{ background:var(--cream); }
+  .upload-zone input{ display:none; }
+  .controls{
+    display:flex;
+    gap:.8rem;
+    justify-content:center;
+    flex-wrap:wrap;
+    margin-bottom:1.8rem;
+  }
+  .controls label{
+    font-size:.78rem;
+    color:#7a6a72;
+    display:flex;
+    flex-direction:column;
+    gap:.3rem;
+    align-items:center;
+  }
+  button.action{
+    font-family:'Inter', sans-serif;
+    font-size:.85rem;
+    letter-spacing:.05em;
+    background:var(--rose);
+    color:#fff;
+    border:none;
+    padding:.7rem 1.6rem;
+    border-radius:30px;
+    cursor:pointer;
+    transition:background .2s ease;
+  }
+  button.action:hover{ background:var(--plum); }
+  button.action:disabled{ background:#cdb9bf; cursor:not-allowed; }
+  button.ghost{
+    font-family:'Inter', sans-serif;
+    font-size:.8rem;
+    background:none;
+    border:1px solid var(--rose);
+    color:var(--rose);
+    padding:.6rem 1.4rem;
+    border-radius:30px;
+    cursor:pointer;
+  }
+  .compare{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1.2rem;
+    margin-top:2rem;
+  }
+  @media (max-width:560px){ .compare{ grid-template-columns:1fr; } }
+  .compare figure{ margin:0; }
+  .compare img{
+    width:100%;
+    border-radius:4px;
+    display:block;
+    background:var(--rose-soft);
+  }
+  .compare figcaption{
+    font-size:.75rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#aa97a0;
+    margin-top:.5rem;
+  }
+  .result-actions{
+    margin-top:1.6rem;
+    display:flex;
+    gap:.8rem;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .note{
+    font-size:.75rem;
+    color:#bba9b1;
+    margin-top:1.4rem;
+    line-height:1.5;
+  }
+  /* Lightbox */
+  .lightbox{
+    position:fixed;
+    inset:0;
+    background:rgba(20,10,16,.88);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+    padding:2rem;
+  }
+  .lightbox.open{ display:flex; }
+  .lightbox img{
+    max-width:90vw;
+    max-height:85vh;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .lightbox-close{
+    position:absolute;
+    top:1.5rem;
+    right:2rem;
+    color:var(--cream);
+    font-size:2rem;
+    cursor:pointer;
+    font-family:'Cormorant Garamond', serif;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">nossos momentos</div>
+  <h1>André<span class="e">&</span>Sheilla</h1>
+  <p class="sub">um cantinho só nosso</p>
+</header>
+
+<div class="gallery" id="gallery"></div>
+
+<div class="enhancer">
+  <div class="enhancer-card">
+    <h2>Melhorar uma foto</h2>
+    <p class="desc">Escolha uma foto antiga ou borrada para aumentar nitidez, contraste e resolução, direto no navegador.</p>
+
+    <label class="upload-zone" id="uploadZone">
+      <span id="uploadLabel">Clique para escolher uma foto</span>
+      <input type="file" id="fileInput" accept="image/*">
+    </label>
+
+    <div class="controls">
+      <label>Nitidez
+        <input type="range" id="sharpRange" min="0" max="100" value="55">
+      </label>
+      <label>Ampliação
+        <select id="scaleSelect">
+          <option value="1">Original</option>
+          <option value="2" selected>2x</option>
+          <option value="3">3x</option>
+        </select>
+      </label>
+    </div>
+
+    <button class="action" id="enhanceBtn" disabled>Melhorar foto</button>
+
+    <div class="compare" id="compareWrap" style="display:none;">
+      <figure>
+        <img id="beforeImg" alt="Antes">
+        <figcaption>Antes</figcaption>
+      </figure>
+      <figure>
+        <img id="afterImg" alt="Depois">
+        <figcaption>Depois</figcaption>
+      </figure>
+    </div>
+
+    <div class="result-actions" id="resultActions" style="display:none;">
+      <button class="action" id="downloadBtn">Baixar foto melhorada</button>
+      <button class="ghost" id="addToGalleryBtn">Adicionar à galeria</button>
+    </div>
+
+    <p class="note">Isso aplica nitidez, contraste e ampliação por algoritmo no próprio navegador — não é reconstrução por IA generativa (tipo Remini), então não inventa detalhes que não existem na foto original. Funciona melhor em fotos já razoáveis que só precisam de um upgrade.</p>
+  </div>
+</div>
+
+<footer>feito com carinho</footer>
+
+<div class="lightbox" id="lightbox">
+  <span class="lightbox-close" id="lbClose">&times;</span>
+  <img id="lbImg" src="" alt="">
+</div>
+
+<script>
+  // ====== COMO USAR ======
+  // 1. Crie uma pasta chamada "fotos" na mesma pasta deste arquivo index.html
+  // 2. Coloque suas fotos dentro dela (ex: fotos/foto1.jpg, fotos/foto2.jpg...)
+  // 3. Edite a lista abaixo com os nomes exatos dos arquivos que você usou
+  //    (a legenda é opcional, pode apagar ou deixar em branco)
+
+  const fotos = [
+    { src: "fotos/foto1.jpg", legenda: "" },
+    { src: "fotos/foto2.jpg", legenda: "" },
+    { src: "fotos/foto3.jpg", legenda: "" },
+    { src: "fotos/foto4.jpg", legenda: "" },
+    { src: "fotos/foto5.jpg", legenda: "" },
+    { src: "fotos/foto6.jpg", legenda: "" },
+    { src: "fotos/foto7.jpg", legenda: "" },
+    { src: "fotos/foto8.jpg", legenda: "" },
+    { src: "fotos/foto9.jpg", legenda: "" },
+  ];
+
+  const gallery = document.getElementById('gallery');
+  fotos.forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'frame';
+    div.innerHTML = `<img src="${f.src}" alt="${f.legenda}" loading="lazy">
+                      <div class="cap">${f.legenda}</div>`;
+    div.addEventListener('click', () => openLightbox(f.src));
+    gallery.appendChild(div);
+  });
+
+  const lightbox = document.getElementById('lightbox');
+  const lbImg = document.getElementById('lbImg');
+  function openLightbox(src){
+    lbImg.src = src;
+    lightbox.classList.add('open');
+  }
+  document.getElementById('lbClose').addEventListener('click', () => {
+    lightbox.classList.remove('open');
+  });
+  lightbox.addEventListener('click', (e) => {
+    if(e.target === lightbox) lightbox.classList.remove('open');
+  });
+
+  // ====== MELHORADOR DE FOTO (nitidez + contraste + ampliação, 100% no navegador) ======
+  const fileInput = document.getElementById('fileInput');
+  const uploadLabel = document.getElementById('uploadLabel');
+  const enhanceBtn = document.getElementById('enhanceBtn');
+  const sharpRange = document.getElementById('sharpRange');
+  const scaleSelect = document.getElementById('scaleSelect');
+  const compareWrap = document.getElementById('compareWrap');
+  const beforeImg = document.getElementById('beforeImg');
+  const afterImg = document.getElementById('afterImg');
+  const resultActions = document.getElementById('resultActions');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const addToGalleryBtn = document.getElementById('addToGalleryBtn');
+
+  let originalImage = null;
+  let enhancedDataUrl = null;
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if(!file) return;
+    uploadLabel.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        originalImage = img;
+        beforeImg.src = img.src;
+        enhanceBtn.disabled = false;
+        compareWrap.style.display = 'none';
+        resultActions.style.display = 'none';
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  enhanceBtn.addEventListener('click', () => {
+    if(!originalImage) return;
+    const scale = parseFloat(scaleSelect.value);
+    const sharpAmount = parseInt(sharpRange.value, 10) / 100; // 0 a 1
+
+    const w = originalImage.naturalWidth * scale;
+    const h = originalImage.naturalHeight * scale;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(originalImage, 0, 0, w, h);
+
+    // leve ajuste de contraste/saturação antes de afiar
+    ctx.filter = 'contrast(1.08) saturate(1.06)';
+    ctx.drawImage(canvas, 0, 0);
+    ctx.filter = 'none';
+
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const sharpened = applyUnsharpMask(imageData, sharpAmount);
+    ctx.putImageData(sharpened, 0, 0);
+
+    enhancedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    afterImg.src = enhancedDataUrl;
+    compareWrap.style.display = 'grid';
+    resultActions.style.display = 'flex';
+  });
+
+  // Unsharp mask simples: borra uma cópia (box blur 3x3) e soma a diferença de volta na original
+  function applyUnsharpMask(imageData, amount){
+    const { width, height, data } = imageData;
+    const src = new Uint8ClampedArray(data);
+    const blurred = boxBlur(src, width, height);
+    const out = new Uint8ClampedArray(data.length);
+
+    for(let i = 0; i < data.length; i += 4){
+      for(let c = 0; c < 3; c++){
+        const orig = src[i + c];
+        const blur = blurred[i + c];
+        const diff = orig - blur;
+        out[i + c] = orig + diff * amount * 2.2;
+      }
+      out[i + 3] = src[i + 3];
+    }
+    return new ImageData(out, width, height);
+  }
+
+  function boxBlur(data, width, height){
+    const out = new Uint8ClampedArray(data.length);
+    const r = 1; // raio 1 = janela 3x3
+    for(let y = 0; y < height; y++){
+      for(let x = 0; x < width; x++){
+        let sr = 0, sg = 0, sb = 0, sa = 0, count = 0;
+        for(let dy = -r; dy <= r; dy++){
+          for(let dx = -r; dx <= r; dx++){
+            const nx = x + dx, ny = y + dy;
+            if(nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            const idx = (ny * width + nx) * 4;
+            sr += data[idx]; sg += data[idx+1]; sb += data[idx+2]; sa += data[idx+3];
+            count++;
+          }
+        }
+        const idx = (y * width + x) * 4;
+        out[idx] = sr / count;
+        out[idx+1] = sg / count;
+        out[idx+2] = sb / count;
+        out[idx+3] = sa / count;
+      }
+    }
+    return out;
+  }
+
+  downloadBtn.addEventListener('click', () => {
+    if(!enhancedDataUrl) return;
+    const a = document.createElement('a');
+    a.href = enhancedDataUrl;
+    a.download = 'foto-melhorada.jpg';
+    a.click();
+  });
+
+  addToGalleryBtn.addEventListener('click', () => {
+    if(!enhancedDataUrl) return;
+    const div = document.createElement('div');
+    div.className = 'frame';
+    div.innerHTML = `<img src="${enhancedDataUrl}" alt="" loading="lazy"><div class="cap"></div>`;
+    div.addEventListener('click', () => openLightbox(enhancedDataUrl));
+    gallery.prepend(div);
+    addToGalleryBtn.textContent = 'Adicionada à galeria ✓';
+    addToGalleryBtn.disabled = true;
+  });
+</script>
+
+</body>
+</html>
