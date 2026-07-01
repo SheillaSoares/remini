@@ -404,7 +404,7 @@
 
 <div class="enhancer">
   <div class="enhancer-card">
-    <h2>PHOTOSMART DA SHEILLINHA (ClipDrop)</h2>
+    <h2>MELHORAR ROSTO COM IA (ClipDrop)</h2>
     <p class="desc">Essa opção usa a API de upscaling/enhance da ClipDrop pra deixar a foto mais nítida e melhorar a definição do rosto — estilo Remini. Precisa de uma chave de API gratuita (100 créditos grátis pra testar, depois é pago por crédito). Pegue a sua em <span style="color:var(--cyan);">clipdrop.co/apis</span> (crie uma conta e gere um token).</p>
 
     <label class="upload-zone" id="uploadZone">
@@ -603,13 +603,21 @@
     updateAiButtonState();
   });
 
-  function imageToBlob(img){
+  function imageToWorkingBlob(img, maxDim){
+    // reduz a foto pra uma resolução de trabalho antes de mandar pra API.
+    // fotos de celular já vêm grandes (perto do limite de 4096px da ClipDrop),
+    // então pedir só "mais 2x" nelas resultava em quase nenhuma mudança real.
+    // reduzindo primeiro, garantimos que a IA sempre reconstrói detalhe de verdade.
     return new Promise((resolve) => {
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.max(w, h) > maxDim ? maxDim / Math.max(w, h) : 1;
+      const outW = Math.max(1, Math.round(w * scale));
+      const outH = Math.max(1, Math.round(h * scale));
       const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = img.naturalWidth;
-      tmpCanvas.height = img.naturalHeight;
-      tmpCanvas.getContext('2d').drawImage(img, 0, 0);
-      tmpCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+      tmpCanvas.width = outW;
+      tmpCanvas.height = outH;
+      tmpCanvas.getContext('2d').drawImage(img, 0, 0, outW, outH);
+      tmpCanvas.toBlob((blob) => resolve({ blob, width: outW, height: outH }), 'image/jpeg', 0.95);
     });
   }
 
@@ -625,13 +633,13 @@
     aiResultActions.style.display = 'none';
 
     try{
-      const imgBlob = await imageToBlob(originalImage);
-
-      // aumenta a resolução em até 2x (respeitando o limite de 4096px da API),
-      // o que também melhora nitidez e reduz artefatos de compressão no rosto
-      const scale = Math.min(2, CLIPDROP_MAX_DIM / originalImage.naturalWidth, CLIPDROP_MAX_DIM / originalImage.naturalHeight);
-      const targetWidth = Math.max(1, Math.round(originalImage.naturalWidth * Math.max(scale, 1)));
-      const targetHeight = Math.max(1, Math.round(originalImage.naturalHeight * Math.max(scale, 1)));
+      // reduz pra uma resolução de trabalho e sempre pede 2x de volta,
+      // assim a IA sempre reconstrói detalhe de verdade (nunca fica "sem efeito")
+      const DOWNSCALE_MAX = 1600;
+      const { blob: imgBlob, width: workW, height: workH } = await imageToWorkingBlob(originalImage, DOWNSCALE_MAX);
+      const upscaleFactor = Math.min(2, CLIPDROP_MAX_DIM / workW, CLIPDROP_MAX_DIM / workH);
+      const targetWidth = Math.max(1, Math.round(workW * upscaleFactor));
+      const targetHeight = Math.max(1, Math.round(workH * upscaleFactor));
 
       const formData = new FormData();
       formData.append('image_file', imgBlob, 'foto.jpg');
@@ -659,9 +667,13 @@
 
       aiBeforeImg.src = originalImage.src;
       aiAfterImg.src = aiEnhancedDataUrl;
+      aiBeforeImg.style.cursor = 'zoom-in';
+      aiAfterImg.style.cursor = 'zoom-in';
+      aiBeforeImg.onclick = () => openLightbox(originalImage.src);
+      aiAfterImg.onclick = () => openLightbox(aiEnhancedDataUrl);
       aiCompareWrap.style.display = 'grid';
       aiResultActions.style.display = 'flex';
-      aiStatus.textContent = 'Pronto!';
+      aiStatus.textContent = 'Pronto! Clique nas fotos pra ver em tamanho real e comparar o detalhe.';
     } catch(err){
       console.error('Erro ClipDrop:', err);
       aiStatus.textContent = 'Não foi possível melhorar a foto: ' + err.message;
