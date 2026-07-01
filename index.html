@@ -337,6 +337,38 @@
     color:var(--muted);
     margin-top:.6rem;
   }
+  .compare figcaption .dims{
+    display:block;
+    margin-top:.25rem;
+    font-family:'Rajdhani', sans-serif;
+    letter-spacing:.03em;
+    text-transform:none;
+    color:var(--cyan);
+    font-size:.72rem;
+  }
+  .zoom-section{
+    margin-top:2.4rem;
+    padding-top:2.2rem;
+    border-top:1px dashed var(--line);
+  }
+  .zoom-section h3{
+    font-family:'Orbitron', sans-serif;
+    font-size:.85rem;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--pink);
+    margin-bottom:.4rem;
+  }
+  .zoom-section .zoom-desc{
+    font-size:.82rem;
+    color:var(--muted);
+    margin-bottom:1.2rem;
+  }
+  .compare.zoom img{
+    aspect-ratio:1/1;
+    object-fit:cover;
+    image-rendering:auto;
+  }
   .result-actions{
     margin-top:1.7rem;
     display:flex;
@@ -425,12 +457,27 @@
     <div class="compare" id="aiCompareWrap" style="display:none;">
       <figure>
         <img id="aiBeforeImg" alt="Antes">
-        <figcaption>Antes</figcaption>
+        <figcaption>Antes<span class="dims" id="aiBeforeDims"></span></figcaption>
       </figure>
       <figure>
         <img id="aiAfterImg" alt="Depois (IA)">
-        <figcaption>Depois (IA)</figcaption>
+        <figcaption>Depois (IA)<span class="dims" id="aiAfterDims"></span></figcaption>
       </figure>
+    </div>
+
+    <div class="zoom-section" id="aiZoomSection" style="display:none;">
+      <h3>Zoom no detalhe</h3>
+      <p class="zoom-desc">Mesmo recorte central das duas fotos, ampliado — é aqui que a diferença de nitidez fica visível de verdade.</p>
+      <div class="compare zoom">
+        <figure>
+          <img id="aiBeforeZoomImg" alt="Antes (zoom)">
+          <figcaption>Antes</figcaption>
+        </figure>
+        <figure>
+          <img id="aiAfterZoomImg" alt="Depois (zoom)">
+          <figcaption>Depois (IA)</figcaption>
+        </figure>
+      </div>
     </div>
 
     <div class="result-actions" id="aiResultActions" style="display:none;">
@@ -452,10 +499,7 @@
 </div>
 
 <script>
-  // ====== COMO USAR ======
-  // 1. Crie uma pasta chamada "fotos" na mesma pasta deste arquivo index.html
-  // 2. Coloque suas fotos dentro dela
-  // 3. Edite a lista abaixo com os nomes exatos dos arquivos (extensão incluída)
+ 
 
   const fotos = [
     { src: "fotos/foto1.jpeg", legenda: "" },
@@ -558,6 +602,7 @@
         originalImage = img;
         aiCompareWrap.style.display = 'none';
         aiResultActions.style.display = 'none';
+        aiZoomSection.style.display = 'none';
         updateAiButtonState();
       };
       img.src = e.target.result;
@@ -580,6 +625,65 @@
   let aiEnhancedDataUrl = null;
   const CLIPDROP_ENDPOINT = 'https://clipdrop-api.co/image-upscaling/v1/upscale';
   const CLIPDROP_MAX_DIM = 4096;
+  const aiBeforeDims = document.getElementById('aiBeforeDims');
+  const aiAfterDims = document.getElementById('aiAfterDims');
+  const aiZoomSection = document.getElementById('aiZoomSection');
+  const aiBeforeZoomImg = document.getElementById('aiBeforeZoomImg');
+  const aiAfterZoomImg = document.getElementById('aiAfterZoomImg');
+
+  function loadImage(src){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  // Aplica nitidez real (unsharp mask simplificado) direto nos pixels do canvas.
+  // É isso que faz o resultado parecer "puxado" de verdade, em vez de só maior.
+  function sharpenCanvas(ctx, width, height, amount){
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const src = imgData.data;
+    const out = new Uint8ClampedArray(src.length);
+    const k = [0, -amount, 0, -amount, 1 + 4 * amount, -amount, 0, -amount, 0];
+    for(let y = 0; y < height; y++){
+      const yTop = Math.max(0, y - 1) * width;
+      const yMid = y * width;
+      const yBot = Math.min(height - 1, y + 1) * width;
+      for(let x = 0; x < width; x++){
+        const xL = Math.max(0, x - 1);
+        const xR = Math.min(width - 1, x + 1);
+        const idx = (yMid + x) * 4;
+        for(let c = 0; c < 3; c++){
+          const sum =
+            src[(yTop + xL) * 4 + c] * k[0] + src[(yTop + x) * 4 + c] * k[1] + src[(yTop + xR) * 4 + c] * k[2] +
+            src[(yMid + xL) * 4 + c] * k[3] + src[(yMid + x) * 4 + c] * k[4] + src[(yMid + xR) * 4 + c] * k[5] +
+            src[(yBot + xL) * 4 + c] * k[6] + src[(yBot + x) * 4 + c] * k[7] + src[(yBot + xR) * 4 + c] * k[8];
+          out[idx + c] = sum;
+        }
+        out[idx + 3] = src[idx + 3];
+      }
+    }
+    imgData.data.set(out);
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  // Recorta o centro da imagem (mesma % nas duas) e amplia num canvas quadrado fixo,
+  // assim a diferença de nitidez fica óbvia em vez de sumir num comparativo do mesmo tamanho.
+  function cropCenterToDataUrl(source, sourceW, sourceH, outSize, cropFraction){
+    const cropSize = Math.round(Math.min(sourceW, sourceH) * cropFraction);
+    const sx = Math.round((sourceW - cropSize) / 2);
+    const sy = Math.round((sourceH - cropSize) / 2);
+    const c = document.createElement('canvas');
+    c.width = outSize;
+    c.height = outSize;
+    const cctx = c.getContext('2d');
+    cctx.imageSmoothingEnabled = true;
+    cctx.imageSmoothingQuality = 'high';
+    cctx.drawImage(source, sx, sy, cropSize, cropSize, 0, 0, outSize, outSize);
+    return c.toDataURL('image/png');
+  }
 
   // carrega chave salva, se existir
   try{
@@ -631,6 +735,7 @@
     aiStatus.textContent = 'Enviando foto para a ClipDrop, isso pode levar alguns segundos...';
     aiCompareWrap.style.display = 'none';
     aiResultActions.style.display = 'none';
+    aiZoomSection.style.display = 'none';
 
     try{
       // reduz pra uma resolução de trabalho e sempre pede 2x de volta,
@@ -658,12 +763,21 @@
         throw new Error(`Erro ${response.status}: ${errText.slice(0, 200)}`);
       }
 
-      const resultBlob = await response.blob();
-      aiEnhancedDataUrl = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(resultBlob);
-      });
+      const resultRawBlob = await response.blob();
+      const resultRawUrl = URL.createObjectURL(resultRawBlob);
+      const resultImg = await loadImage(resultRawUrl);
+      URL.revokeObjectURL(resultRawUrl);
+
+      // aplica nitidez real em cima do upscale da ClipDrop
+      aiStatus.textContent = 'Aplicando nitidez sobre o resultado...';
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = resultImg.naturalWidth;
+      outCanvas.height = resultImg.naturalHeight;
+      const outCtx = outCanvas.getContext('2d');
+      outCtx.drawImage(resultImg, 0, 0);
+      sharpenCanvas(outCtx, outCanvas.width, outCanvas.height, 0.55);
+
+      aiEnhancedDataUrl = outCanvas.toDataURL('image/png');
 
       aiBeforeImg.src = originalImage.src;
       aiAfterImg.src = aiEnhancedDataUrl;
@@ -672,8 +786,21 @@
       aiBeforeImg.onclick = () => openLightbox(originalImage.src);
       aiAfterImg.onclick = () => openLightbox(aiEnhancedDataUrl);
       aiCompareWrap.style.display = 'grid';
+
+      // mostra as dimensões reais de cada imagem (prova de que o resultado é diferente)
+      const origW = originalImage.naturalWidth, origH = originalImage.naturalHeight;
+      aiBeforeDims.textContent = `${origW}×${origH}px`;
+      aiAfterDims.textContent = `${outCanvas.width}×${outCanvas.height}px`;
+
+      // comparativo com zoom no mesmo recorte central, ampliado, pra nitidez ficar visível
+      const zoomBeforeUrl = cropCenterToDataUrl(originalImage, origW, origH, 480, 0.28);
+      const zoomAfterUrl = cropCenterToDataUrl(outCanvas, outCanvas.width, outCanvas.height, 480, 0.28);
+      aiBeforeZoomImg.src = zoomBeforeUrl;
+      aiAfterZoomImg.src = zoomAfterUrl;
+      aiZoomSection.style.display = 'block';
+
       aiResultActions.style.display = 'flex';
-      aiStatus.textContent = 'Pronto! Clique nas fotos pra ver em tamanho real e comparar o detalhe.';
+      aiStatus.textContent = 'Pronto! Veja as dimensões e o zoom no detalhe abaixo — clique nas fotos pra tamanho real.';
     } catch(err){
       console.error('Erro ClipDrop:', err);
       aiStatus.textContent = 'Não foi possível melhorar a foto: ' + err.message;
