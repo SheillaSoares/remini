@@ -208,6 +208,30 @@
     text-align:center;
     padding:2rem;
   }
+  .slide-remove{
+    position:absolute;
+    top:12px;
+    right:12px;
+    width:32px; height:32px;
+    border-radius:50%;
+    background:rgba(7,10,18,.65);
+    border:1px solid var(--line);
+    color:var(--pink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:5;
+    font-size:1.1rem;
+    line-height:1;
+    user-select:none;
+    transition:border-color .2s ease, background .2s ease, transform .2s ease;
+  }
+  .slide-remove:hover{
+    border-color:var(--pink);
+    background:rgba(255,95,168,.15);
+    transform:scale(1.08);
+  }
 
   footer{
     position:relative;
@@ -346,29 +370,6 @@
     color:var(--cyan);
     font-size:.72rem;
   }
-  .zoom-section{
-    margin-top:2.4rem;
-    padding-top:2.2rem;
-    border-top:1px dashed var(--line);
-  }
-  .zoom-section h3{
-    font-family:'Orbitron', sans-serif;
-    font-size:.85rem;
-    letter-spacing:.1em;
-    text-transform:uppercase;
-    color:var(--pink);
-    margin-bottom:.4rem;
-  }
-  .zoom-section .zoom-desc{
-    font-size:.82rem;
-    color:var(--muted);
-    margin-bottom:1.2rem;
-  }
-  .compare.zoom img{
-    aspect-ratio:1/1;
-    object-fit:cover;
-    image-rendering:auto;
-  }
   .result-actions{
     margin-top:1.7rem;
     display:flex;
@@ -475,22 +476,7 @@
         <img id="aiAfterImg" alt="Depois (IA)">
         <figcaption>Depois (IA)<span class="dims" id="aiAfterDims"></span></figcaption>
       </figure>
-    </div>
-
-    <div class="zoom-section" id="aiZoomSection" style="display:none;">
-      <h3>Zoom no detalhe</h3>
-      <p class="zoom-desc">Mesmo recorte central das duas fotos, ampliado — é aqui que a diferença de nitidez fica visível de verdade.</p>
-      <div class="compare zoom">
-        <figure>
-          <img id="aiBeforeZoomImg" alt="Antes (zoom)">
-          <figcaption>Antes</figcaption>
-        </figure>
-        <figure>
-          <img id="aiAfterZoomImg" alt="Depois (zoom)">
-          <figcaption>Depois (IA)</figcaption>
-        </figure>
-      </div>
-    </div>
+    </div>   
 
     <div class="result-actions" id="aiResultActions" style="display:none;">
       <button class="action" id="aiDownloadBtn">Baixar foto melhorada</button>
@@ -511,10 +497,6 @@
 </div>
 
 <script>
-  // ====== COMO USAR ======
-  // 1. Crie uma pasta chamada "fotos" na mesma pasta deste arquivo index.html
-  // 2. Coloque suas fotos dentro dela
-  // 3. Edite a lista abaixo com os nomes exatos dos arquivos (extensão incluída)
 
   const fotos = [
     { src: "fotos/foto1.jpeg", legenda: "" },
@@ -551,8 +533,13 @@
     fotos.forEach((f, i) => {
       const slide = document.createElement('div');
       slide.className = 'slide';
-      slide.innerHTML = `<img src="${f.src}" alt="${f.legenda}">`;
+      slide.style.position = 'relative';
+      slide.innerHTML = `<img src="${f.src}" alt="${f.legenda}"><div class="slide-remove" title="Excluir esta foto">&times;</div>`;
       slide.querySelector('img').addEventListener('click', () => openLightbox(f.src));
+      slide.querySelector('.slide-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeFoto(i);
+      });
       track.appendChild(slide);
 
       const dot = document.createElement('div');
@@ -579,6 +566,17 @@
   function restartAuto(){
     if(timer) clearInterval(timer);
     if(fotos.length > 1) timer = setInterval(() => goTo(current + 1), 4000);
+  }
+
+  function removeFoto(i){
+    if(i < 0 || i >= fotos.length) return;
+    if(!confirm('Excluir esta foto do carrossel?')) return;
+    fotos.splice(i, 1);
+    const wasCurrent = current;
+    buildStage();
+    if(fotos.length > 0){
+      goTo(Math.min(wasCurrent, fotos.length - 1));
+    }
   }
 
   arrowNext.addEventListener('click', () => { goTo(current + 1); restartAuto(); });
@@ -617,7 +615,6 @@
         originalImage = img;
         aiCompareWrap.style.display = 'none';
         aiResultActions.style.display = 'none';
-        aiZoomSection.style.display = 'none';
         updateAiButtonState();
       };
       img.src = e.target.result;
@@ -644,9 +641,6 @@
   const FACEBEAUTY_MAX_BYTES = 3 * 1024 * 1024; // 3MB, limite da API
   const aiBeforeDims = document.getElementById('aiBeforeDims');
   const aiAfterDims = document.getElementById('aiAfterDims');
-  const aiZoomSection = document.getElementById('aiZoomSection');
-  const aiBeforeZoomImg = document.getElementById('aiBeforeZoomImg');
-  const aiAfterZoomImg = document.getElementById('aiAfterZoomImg');
   const sharpRange = document.getElementById('sharpRange');
   const smoothRange = document.getElementById('smoothRange');
   const whiteRange = document.getElementById('whiteRange');
@@ -680,22 +674,6 @@
       blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
     }
     return { blob, width: outW, height: outH };
-  }
-
-  // Recorta o centro da imagem (mesma % nas duas) e amplia num canvas quadrado fixo,
-  // assim a diferença de embelezamento fica óbvia em vez de sumir num comparativo do mesmo tamanho.
-  function cropCenterToDataUrl(source, sourceW, sourceH, outSize, cropFraction){
-    const cropSize = Math.round(Math.min(sourceW, sourceH) * cropFraction);
-    const sx = Math.round((sourceW - cropSize) / 2);
-    const sy = Math.round((sourceH - cropSize) / 2);
-    const c = document.createElement('canvas');
-    c.width = outSize;
-    c.height = outSize;
-    const cctx = c.getContext('2d');
-    cctx.imageSmoothingEnabled = true;
-    cctx.imageSmoothingQuality = 'high';
-    cctx.drawImage(source, sx, sy, cropSize, cropSize, 0, 0, outSize, outSize);
-    return c.toDataURL('image/png');
   }
 
   // carrega chave salva, se existir
@@ -748,7 +726,6 @@
     aiStatus.textContent = 'Enviando foto para a AILabTools, isso pode levar alguns segundos...';
     aiCompareWrap.style.display = 'none';
     aiResultActions.style.display = 'none';
-    aiZoomSection.style.display = 'none';
     aiEnhancedDataUrl = null;
     aiEnhancedRemoteUrl = null;
 
@@ -809,12 +786,6 @@
           canvas.height = resultImg.naturalHeight;
           canvas.getContext('2d').drawImage(resultImg, 0, 0);
           aiEnhancedDataUrl = canvas.toDataURL('image/png');
-
-          const zoomBeforeUrl = cropCenterToDataUrl(originalImage, originalImage.naturalWidth, originalImage.naturalHeight, 480, 0.28);
-          const zoomAfterUrl = cropCenterToDataUrl(canvas, canvas.width, canvas.height, 480, 0.28);
-          aiBeforeZoomImg.src = zoomBeforeUrl;
-          aiAfterZoomImg.src = zoomAfterUrl;
-          aiZoomSection.style.display = 'block';
         } catch(e){
           canvasBlocked = true;
         }
@@ -822,9 +793,9 @@
 
       aiResultActions.style.display = 'flex';
       if(canvasBlocked){
-        aiStatus.textContent = 'Pronto! (a AILabTools bloqueou o processamento local da imagem, então o zoom e o botão "baixar" vão abrir o link direto — o link expira em 24h.)';
+        aiStatus.textContent = 'Pronto! (a AILabTools bloqueou o processamento local da imagem, então o botão "baixar" vai abrir o link direto — o link expira em 24h.)';
       } else {
-        aiStatus.textContent = 'Pronto! Veja as dimensões e o zoom no detalhe abaixo — clique nas fotos pra tamanho real.';
+        aiStatus.textContent = 'Pronto! Veja as dimensões acima — clique nas fotos pra tamanho real.';
       }
     } catch(err){
       console.error('Erro AILabTools:', err);
