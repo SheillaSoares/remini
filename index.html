@@ -436,7 +436,7 @@
 
 <div class="enhancer">
   <div class="enhancer-card">
-    <h2>PHOTOSMART DA SHEILLINHA (ClipDrop)</h2>
+    <h2>PHOTOSMART DA SHEILLINHA</h2>
     
 
     <label class="upload-zone" id="uploadZone">
@@ -445,13 +445,25 @@
     </label>
 
     <div style="max-width:480px; margin:0 auto 1.4rem; text-align:left;">
-      <label for="clipdropKeyInput" style="display:block; font-size:.85rem; color:var(--cyan); letter-spacing:.05em; margin-bottom:.5rem; font-family:'Orbitron', sans-serif; text-transform:uppercase;">Cole sua chave da API ClipDrop aqui</label>
-      <input type="text" id="clipdropKeyInput" placeholder="Sua x-api-key..." style="width:100%; background:#040810; color:var(--text); border:1.5px solid var(--cyan); border-radius:8px; padding:.9rem 1rem; font-size:1rem; font-family:'Rajdhani', sans-serif; outline:none;">
+      <label for="clipdropKeyInput" style="display:block; font-size:.85rem; color:var(--cyan); letter-spacing:.05em; margin-bottom:.5rem; font-family:'Orbitron', sans-serif; text-transform:uppercase;">Cole sua chave da API AILabTools aqui</label>
+      <input type="text" id="clipdropKeyInput" placeholder="Sua ailabapi-api-key..." style="width:100%; background:#040810; color:var(--text); border:1.5px solid var(--cyan); border-radius:8px; padding:.9rem 1rem; font-size:1rem; font-family:'Rajdhani', sans-serif; outline:none;">
     </div>
     <button class="ghost" id="saveKeyBtn" style="margin-bottom:1.6rem;">Salvar chave neste navegador</button>
 
+    <div class="controls">
+      <label>Nitidez
+        <input type="range" id="sharpRange" min="0" max="1" step="0.05" value="0.5">
+      </label>
+      <label>Suavizar pele
+        <input type="range" id="smoothRange" min="0" max="1" step="0.05" value="0.5">
+      </label>
+      <label>Clarear pele
+        <input type="range" id="whiteRange" min="0" max="1" step="0.05" value="0.25">
+      </label>
+    </div>
+
     <div>
-      <button class="action" id="aiEnhanceBtn" disabled>Melhorar </button>
+      <button class="action" id="aiEnhanceBtn" disabled>Embelezar rosto com IA</button>
     </div>
 
     <div class="compare" id="aiCompareWrap" style="display:none;">
@@ -487,7 +499,7 @@
 
     <p id="aiStatus" class="note" style="min-height:1.2em;"></p>
 
-    <p class="note">A chave fica salva só no seu navegador (localStorage) e é enviada direto do seu navegador para a ClipDrop — não passa por nós. Não compartilhe esse arquivo com a chave salva, e evite usar fotos de outras pessoas sem o consentimento delas. Imagens geradas/melhoradas por IA podem alterar levemente a aparência real.</p>
+    <p class="note">A chave fica salva só no seu navegador (localStorage) e é enviada direto do seu navegador para a AILabTools — não passa por nós. A foto processada fica hospedada temporariamente nos servidores da AILabTools (link válido por 24h) antes de ser baixada. Não compartilhe esse arquivo com a chave salva, e evite usar fotos de outras pessoas sem o consentimento delas. Embelezamento por IA altera levemente a aparência real (pele, nitidez, tom).</p>
   </div>
 </div>
 
@@ -499,7 +511,10 @@
 </div>
 
 <script>
- 
+  // ====== COMO USAR ======
+  // 1. Crie uma pasta chamada "fotos" na mesma pasta deste arquivo index.html
+  // 2. Coloque suas fotos dentro dela
+  // 3. Edite a lista abaixo com os nomes exatos dos arquivos (extensão incluída)
 
   const fotos = [
     { src: "fotos/foto1.jpeg", legenda: "" },
@@ -623,54 +638,52 @@
   const aiStatus = document.getElementById('aiStatus');
 
   let aiEnhancedDataUrl = null;
-  const CLIPDROP_ENDPOINT = 'https://clipdrop-api.co/image-upscaling/v1/upscale';
-  const CLIPDROP_MAX_DIM = 4096;
+  let aiEnhancedRemoteUrl = null;
+  const FACEBEAUTY_ENDPOINT = 'https://www.ailabapi.com/api/portrait/effects/face-beauty';
+  const FACEBEAUTY_MAX_DIM = 2000; // limite da API
+  const FACEBEAUTY_MAX_BYTES = 3 * 1024 * 1024; // 3MB, limite da API
   const aiBeforeDims = document.getElementById('aiBeforeDims');
   const aiAfterDims = document.getElementById('aiAfterDims');
   const aiZoomSection = document.getElementById('aiZoomSection');
   const aiBeforeZoomImg = document.getElementById('aiBeforeZoomImg');
   const aiAfterZoomImg = document.getElementById('aiAfterZoomImg');
+  const sharpRange = document.getElementById('sharpRange');
+  const smoothRange = document.getElementById('smoothRange');
+  const whiteRange = document.getElementById('whiteRange');
 
-  function loadImage(src){
+  function loadImage(src, crossOrigin){
     return new Promise((resolve, reject) => {
       const img = new Image();
+      if(crossOrigin) img.crossOrigin = crossOrigin;
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
   }
 
-  // Aplica nitidez real (unsharp mask simplificado) direto nos pixels do canvas.
-  // É isso que faz o resultado parecer "puxado" de verdade, em vez de só maior.
-  function sharpenCanvas(ctx, width, height, amount){
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const src = imgData.data;
-    const out = new Uint8ClampedArray(src.length);
-    const k = [0, -amount, 0, -amount, 1 + 4 * amount, -amount, 0, -amount, 0];
-    for(let y = 0; y < height; y++){
-      const yTop = Math.max(0, y - 1) * width;
-      const yMid = y * width;
-      const yBot = Math.min(height - 1, y + 1) * width;
-      for(let x = 0; x < width; x++){
-        const xL = Math.max(0, x - 1);
-        const xR = Math.min(width - 1, x + 1);
-        const idx = (yMid + x) * 4;
-        for(let c = 0; c < 3; c++){
-          const sum =
-            src[(yTop + xL) * 4 + c] * k[0] + src[(yTop + x) * 4 + c] * k[1] + src[(yTop + xR) * 4 + c] * k[2] +
-            src[(yMid + xL) * 4 + c] * k[3] + src[(yMid + x) * 4 + c] * k[4] + src[(yMid + xR) * 4 + c] * k[5] +
-            src[(yBot + xL) * 4 + c] * k[6] + src[(yBot + x) * 4 + c] * k[7] + src[(yBot + xR) * 4 + c] * k[8];
-          out[idx + c] = sum;
-        }
-        out[idx + 3] = src[idx + 3];
-      }
+  // Reduz a foto pra caber no limite da API (<=2000px no maior lado, <=3MB),
+  // baixando a qualidade JPEG aos poucos até caber no limite de tamanho.
+  async function prepareImageForFaceBeauty(img){
+    const { naturalWidth: w, naturalHeight: h } = img;
+    const scale = Math.max(w, h) > FACEBEAUTY_MAX_DIM ? FACEBEAUTY_MAX_DIM / Math.max(w, h) : 1;
+    const outW = Math.max(1, Math.round(w * scale));
+    const outH = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    canvas.getContext('2d').drawImage(img, 0, 0, outW, outH);
+
+    let quality = 0.92;
+    let blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    while(blob && blob.size > FACEBEAUTY_MAX_BYTES && quality > 0.4){
+      quality -= 0.1;
+      blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
     }
-    imgData.data.set(out);
-    ctx.putImageData(imgData, 0, 0);
+    return { blob, width: outW, height: outH };
   }
 
   // Recorta o centro da imagem (mesma % nas duas) e amplia num canvas quadrado fixo,
-  // assim a diferença de nitidez fica óbvia em vez de sumir num comparativo do mesmo tamanho.
+  // assim a diferença de embelezamento fica óbvia em vez de sumir num comparativo do mesmo tamanho.
   function cropCenterToDataUrl(source, sourceW, sourceH, outSize, cropFraction){
     const cropSize = Math.round(Math.min(sourceW, sourceH) * cropFraction);
     const sx = Math.round((sourceW - cropSize) / 2);
@@ -687,7 +700,7 @@
 
   // carrega chave salva, se existir
   try{
-    const savedKey = localStorage.getItem('clipdropApiKey');
+    const savedKey = localStorage.getItem('ailabApiKey');
     if(savedKey) clipdropKeyInput.value = savedKey;
   } catch(err){ /* localStorage indisponível, segue sem isso */ }
 
@@ -698,7 +711,7 @@
 
   saveKeyBtn.addEventListener('click', () => {
     try{
-      localStorage.setItem('clipdropApiKey', clipdropKeyInput.value.trim());
+      localStorage.setItem('ailabApiKey', clipdropKeyInput.value.trim());
       saveKeyBtn.textContent = 'Chave salva ✓';
       setTimeout(() => { saveKeyBtn.textContent = 'Salvar chave neste navegador'; }, 1800);
     } catch(err){
@@ -731,29 +744,26 @@
     if(!apiKey) return;
 
     aiEnhanceBtn.disabled = true;
-    aiEnhanceBtn.textContent = 'Melhorando...';
-    aiStatus.textContent = 'Enviando foto para a ClipDrop, isso pode levar alguns segundos...';
+    aiEnhanceBtn.textContent = 'Embelezando...';
+    aiStatus.textContent = 'Enviando foto para a AILabTools, isso pode levar alguns segundos...';
     aiCompareWrap.style.display = 'none';
     aiResultActions.style.display = 'none';
     aiZoomSection.style.display = 'none';
+    aiEnhancedDataUrl = null;
+    aiEnhancedRemoteUrl = null;
 
     try{
-      // reduz pra uma resolução de trabalho e sempre pede 2x de volta,
-      // assim a IA sempre reconstrói detalhe de verdade (nunca fica "sem efeito")
-      const DOWNSCALE_MAX = 1600;
-      const { blob: imgBlob, width: workW, height: workH } = await imageToWorkingBlob(originalImage, DOWNSCALE_MAX);
-      const upscaleFactor = Math.min(2, CLIPDROP_MAX_DIM / workW, CLIPDROP_MAX_DIM / workH);
-      const targetWidth = Math.max(1, Math.round(workW * upscaleFactor));
-      const targetHeight = Math.max(1, Math.round(workH * upscaleFactor));
+      const { blob: imgBlob, width: origW, height: origH } = await prepareImageForFaceBeauty(originalImage);
 
       const formData = new FormData();
-      formData.append('image_file', imgBlob, 'foto.jpg');
-      formData.append('target_width', String(targetWidth));
-      formData.append('target_height', String(targetHeight));
+      formData.append('image', imgBlob, 'foto.jpg');
+      formData.append('sharp', sharpRange.value);
+      formData.append('smooth', smoothRange.value);
+      formData.append('white', whiteRange.value);
 
-      const response = await fetch(CLIPDROP_ENDPOINT, {
+      const response = await fetch(FACEBEAUTY_ENDPOINT, {
         method: 'POST',
-        headers: { 'x-api-key': apiKey },
+        headers: { 'ailabapi-api-key': apiKey },
         body: formData
       });
 
@@ -763,65 +773,87 @@
         throw new Error(`Erro ${response.status}: ${errText.slice(0, 200)}`);
       }
 
-      const resultRawBlob = await response.blob();
-      const resultRawUrl = URL.createObjectURL(resultRawBlob);
-      const resultImg = await loadImage(resultRawUrl);
-      URL.revokeObjectURL(resultRawUrl);
+      const json = await response.json();
+      if(json.error_code){
+        throw new Error(json.error_msg || json.error_detail?.message || 'Erro desconhecido da API');
+      }
+      const imageUrl = json.data?.image_url;
+      if(!imageUrl) throw new Error('A API não retornou uma imagem.');
+      aiEnhancedRemoteUrl = imageUrl;
 
-      // aplica nitidez real em cima do upscale da ClipDrop
-      aiStatus.textContent = 'Aplicando nitidez sobre o resultado...';
-      const outCanvas = document.createElement('canvas');
-      outCanvas.width = resultImg.naturalWidth;
-      outCanvas.height = resultImg.naturalHeight;
-      const outCtx = outCanvas.getContext('2d');
-      outCtx.drawImage(resultImg, 0, 0);
-      sharpenCanvas(outCtx, outCanvas.width, outCanvas.height, 0.55);
-
-      aiEnhancedDataUrl = outCanvas.toDataURL('image/png');
+      // tenta carregar com permissão de canvas (precisa que a AILabTools libere CORS)
+      let resultImg;
+      let canvasBlocked = false;
+      try{
+        resultImg = await loadImage(imageUrl, 'anonymous');
+      } catch(e){
+        canvasBlocked = true;
+        resultImg = await loadImage(imageUrl); // carrega mesmo assim só pra exibir
+      }
 
       aiBeforeImg.src = originalImage.src;
-      aiAfterImg.src = aiEnhancedDataUrl;
+      aiAfterImg.src = imageUrl;
       aiBeforeImg.style.cursor = 'zoom-in';
       aiAfterImg.style.cursor = 'zoom-in';
       aiBeforeImg.onclick = () => openLightbox(originalImage.src);
-      aiAfterImg.onclick = () => openLightbox(aiEnhancedDataUrl);
+      aiAfterImg.onclick = () => openLightbox(imageUrl);
       aiCompareWrap.style.display = 'grid';
 
-      // mostra as dimensões reais de cada imagem (prova de que o resultado é diferente)
-      const origW = originalImage.naturalWidth, origH = originalImage.naturalHeight;
-      aiBeforeDims.textContent = `${origW}×${origH}px`;
-      aiAfterDims.textContent = `${outCanvas.width}×${outCanvas.height}px`;
+      aiBeforeDims.textContent = `${originalImage.naturalWidth}×${originalImage.naturalHeight}px`;
+      aiAfterDims.textContent = `${resultImg.naturalWidth}×${resultImg.naturalHeight}px`;
 
-      // comparativo com zoom no mesmo recorte central, ampliado, pra nitidez ficar visível
-      const zoomBeforeUrl = cropCenterToDataUrl(originalImage, origW, origH, 480, 0.28);
-      const zoomAfterUrl = cropCenterToDataUrl(outCanvas, outCanvas.width, outCanvas.height, 480, 0.28);
-      aiBeforeZoomImg.src = zoomBeforeUrl;
-      aiAfterZoomImg.src = zoomAfterUrl;
-      aiZoomSection.style.display = 'block';
+      if(!canvasBlocked){
+        try{
+          const canvas = document.createElement('canvas');
+          canvas.width = resultImg.naturalWidth;
+          canvas.height = resultImg.naturalHeight;
+          canvas.getContext('2d').drawImage(resultImg, 0, 0);
+          aiEnhancedDataUrl = canvas.toDataURL('image/png');
+
+          const zoomBeforeUrl = cropCenterToDataUrl(originalImage, originalImage.naturalWidth, originalImage.naturalHeight, 480, 0.28);
+          const zoomAfterUrl = cropCenterToDataUrl(canvas, canvas.width, canvas.height, 480, 0.28);
+          aiBeforeZoomImg.src = zoomBeforeUrl;
+          aiAfterZoomImg.src = zoomAfterUrl;
+          aiZoomSection.style.display = 'block';
+        } catch(e){
+          canvasBlocked = true;
+        }
+      }
 
       aiResultActions.style.display = 'flex';
-      aiStatus.textContent = 'Pronto! Veja as dimensões e o zoom no detalhe abaixo — clique nas fotos pra tamanho real.';
+      if(canvasBlocked){
+        aiStatus.textContent = 'Pronto! (a AILabTools bloqueou o processamento local da imagem, então o zoom e o botão "baixar" vão abrir o link direto — o link expira em 24h.)';
+      } else {
+        aiStatus.textContent = 'Pronto! Veja as dimensões e o zoom no detalhe abaixo — clique nas fotos pra tamanho real.';
+      }
     } catch(err){
-      console.error('Erro ClipDrop:', err);
-      aiStatus.textContent = 'Não foi possível melhorar a foto: ' + err.message;
+      console.error('Erro AILabTools:', err);
+      aiStatus.textContent = 'Não foi possível embelezar a foto: ' + err.message;
     } finally{
       aiEnhanceBtn.disabled = false;
-      aiEnhanceBtn.textContent = 'Melhorar rosto com IA';
+      aiEnhanceBtn.textContent = 'Embelezar rosto com IA';
       updateAiButtonState();
     }
   });
 
   aiDownloadBtn.addEventListener('click', () => {
-    if(!aiEnhancedDataUrl) return;
     const a = document.createElement('a');
-    a.href = aiEnhancedDataUrl;
-    a.download = 'foto-melhorada-ia.png';
-    a.click();
+    if(aiEnhancedDataUrl){
+      a.href = aiEnhancedDataUrl;
+      a.download = 'foto-embelezada-ia.png';
+      a.click();
+    } else if(aiEnhancedRemoteUrl){
+      a.href = aiEnhancedRemoteUrl;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.click();
+    }
   });
 
   aiAddToGalleryBtn.addEventListener('click', () => {
-    if(!aiEnhancedDataUrl) return;
-    fotos.push({ src: aiEnhancedDataUrl, legenda: '' });
+    const src = aiEnhancedDataUrl || aiEnhancedRemoteUrl;
+    if(!src) return;
+    fotos.push({ src, legenda: '' });
     buildStage();
     goTo(fotos.length - 1);
     aiAddToGalleryBtn.textContent = 'Adicionada ao carrossel ✓';
