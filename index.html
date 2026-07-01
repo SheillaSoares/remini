@@ -404,17 +404,25 @@
 
 <div class="enhancer">
   <div class="enhancer-card">
-    <h2>MELHORAR ROSTO COM IA (GRATUITO)</h2>
-    <p class="desc">Essa opção usa o modelo open source <b>GFPGAN</b> rodando de graça em um Hugging Face Space, sem chave de API e sem cadastro. É especializado em restaurar rosto (pele, olhos, nitidez); pode demorar um pouco mais que o Gemini, principalmente se o servidor estiver "dormindo".</p>
+    <h2>MELHORAR ROSTO COM IA (SMARTPHOTO DA SHEILLA)</h2>
+    <p class="desc">Essa opção usa o modelo de imagem do Google Gemini pra reconstruir e melhorar pele, olhos e detalhes do rosto de verdade — estilo Remini. Precisa de uma chave de API gratuita/paga do Google (pegue em <span style="color:var(--cyan);">aistudio.google.com/apikey</span>).</p>
 
     <label class="upload-zone" id="uploadZone">
       <span id="uploadLabel">Clique para escolher uma foto</span>
       <input type="file" id="fileInput" accept="image/*">
     </label>
 
+    <div style="max-width:480px; margin:0 auto 1.4rem; text-align:left;">
+      <label for="geminiKeyInput" style="display:block; font-size:.85rem; color:var(--cyan); letter-spacing:.05em; margin-bottom:.5rem; font-family:'Orbitron', sans-serif; text-transform:uppercase;">Cole sua chave da API Gemini aqui</label>
+      <input type="text" id="geminiKeyInput" placeholder="AIzaSy..." style="width:100%; background:#040810; color:var(--text); border:1.5px solid var(--cyan); border-radius:8px; padding:.9rem 1rem; font-size:1rem; font-family:'Rajdhani', sans-serif; outline:none;">
+    </div>
+    <button class="ghost" id="saveKeyBtn" style="margin-bottom:1.6rem;">Salvar chave neste navegador</button>
+
     <div>
       <button class="action" id="aiEnhanceBtn" disabled>Melhorar rosto com IA</button>
-    </div>    <div class="compare" id="aiCompareWrap" style="display:none;">
+    </div>
+
+    <div class="compare" id="aiCompareWrap" style="display:none;">
       <figure>
         <img id="aiBeforeImg" alt="Antes">
         <figcaption>Antes</figcaption>
@@ -432,7 +440,7 @@
 
     <p id="aiStatus" class="note" style="min-height:1.2em;"></p>
 
-    <p class="note">A foto é enviada direto do seu navegador para um Hugging Face Space público (modelo GFPGAN) — não passa por nós, e nada fica salvo. Evite usar fotos de outras pessoas sem o consentimento delas. Como é um servidor gratuito compartilhado, a primeira geração pode demorar até 1 minuto se o servidor estiver "dormindo". Imagens geradas por IA podem alterar levemente a aparência real.</p>
+    <p class="note">A chave fica salva só no seu navegador (localStorage) e é enviada direto do seu navegador para o Google — não passa por nós. Não compartilhe esse arquivo com a chave salva, e evite usar fotos de outras pessoas sem o consentimento delas. Imagens geradas por IA podem alterar levemente a aparência real.</p>
   </div>
 </div>
 
@@ -557,7 +565,9 @@
     reader.readAsDataURL(file);
   });
 
-  // ====== MELHORAR ROSTO COM IA (GFPGAN via Hugging Face Space, gratuito, sem chave) ======
+  // ====== MELHORAR ROSTO COM IA (Gemini API) ======
+  const geminiKeyInput = document.getElementById('geminiKeyInput');
+  const saveKeyBtn = document.getElementById('saveKeyBtn');
   const aiEnhanceBtn = document.getElementById('aiEnhanceBtn');
   const aiCompareWrap = document.getElementById('aiCompareWrap');
   const aiBeforeImg = document.getElementById('aiBeforeImg');
@@ -568,87 +578,95 @@
   const aiStatus = document.getElementById('aiStatus');
 
   let aiEnhancedDataUrl = null;
-  const HF_SPACE = 'avans06/Image_Face_Upscale_Restoration-GFPGAN-RestoreFormer-CodeFormer-GPEN';
+  const GEMINI_MODEL = 'gemini-3.1-flash-image';
+
+  // carrega chave salva, se existir
+  try{
+    const savedKey = localStorage.getItem('geminiApiKey');
+    if(savedKey) geminiKeyInput.value = savedKey;
+  } catch(err){ /* localStorage indisponível, segue sem isso */ }
 
   function updateAiButtonState(){
-    aiEnhanceBtn.disabled = !originalImage;
+    aiEnhanceBtn.disabled = !(originalImage && geminiKeyInput.value.trim());
   }
+  geminiKeyInput.addEventListener('input', updateAiButtonState);
 
-  function imageToBlob(img){
-    return new Promise((resolve) => {
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = img.naturalWidth;
-      tmpCanvas.height = img.naturalHeight;
-      tmpCanvas.getContext('2d').drawImage(img, 0, 0);
-      tmpCanvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
-    });
-  }
+  saveKeyBtn.addEventListener('click', () => {
+    try{
+      localStorage.setItem('geminiApiKey', geminiKeyInput.value.trim());
+      saveKeyBtn.textContent = 'Chave salva ✓';
+      setTimeout(() => { saveKeyBtn.textContent = 'Salvar chave neste navegador'; }, 1800);
+    } catch(err){
+      aiStatus.textContent = 'Não consegui salvar a chave neste navegador.';
+    }
+    updateAiButtonState();
+  });
 
   aiEnhanceBtn.addEventListener('click', async () => {
     if(!originalImage) return;
+    const apiKey = geminiKeyInput.value.trim();
+    if(!apiKey) return;
 
     aiEnhanceBtn.disabled = true;
     aiEnhanceBtn.textContent = 'Melhorando...';
-    aiStatus.textContent = 'Conectando ao servidor gratuito (Hugging Face)... isso pode demorar até 1 minuto se ele estiver "dormindo".';
+    aiStatus.textContent = 'Enviando foto para o Gemini, isso pode levar alguns segundos...';
     aiCompareWrap.style.display = 'none';
     aiResultActions.style.display = 'none';
 
     try{
-      const { Client } = await import('https://cdn.jsdelivr.net/npm/@gradio/client@1.7.0/dist/index.min.js');
+      // gera base64 a partir da imagem original já carregada
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = originalImage.naturalWidth;
+      tmpCanvas.height = originalImage.naturalHeight;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.drawImage(originalImage, 0, 0);
+      const base64Image = tmpCanvas.toDataURL('image/jpeg', 0.95).split(',')[1];
 
-      const client = await Client.connect(HF_SPACE, {
-        status_callback: (s) => {
-          if(s && s.status){
-            if(s.status === 'sending') aiStatus.textContent = 'Enviando a foto...';
-            else if(s.status === 'error') aiStatus.textContent = 'O servidor gratuito está indisponível no momento. Tente de novo em instantes.';
-          }
+      const prompt = "Restaure e melhore esta foto. Aumente a nitidez, corrija o foco, melhore a textura da pele e os detalhes do rosto (olhos, cabelo, contornos) de forma realista, mantendo fielmente a identidade e as feições originais da pessoa. Não troque o rosto por outro nem mude a expressão. Não adicione texto, marca d'água ou elementos que não estavam na foto.";
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: 'image/jpeg', data: base64Image } }
+              ]
+            }],
+            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+          })
         }
-      });
+      );
 
-      const imgBlob = await imageToBlob(originalImage);
-
-      aiStatus.textContent = 'Restaurando o rosto, aguarde (fila compartilhada e gratuita)...';
-
-      const result = await client.predict('/inference', [
-        [[imgBlob, null]],       // gallery: foto enviada
-        'GFPGANv1.4.pth',         // face_model: versão do GFPGAN
-        null,                       // upscale_model: nenhum (só rosto, mantém o resto da foto)
-        1,                           // rescaling factor (1 = mantém o tamanho original)
-        'retinaface_resnet50',        // face_detection
-        10,                             // face eye dist threshold
-        false,                           // face detection only center
-        false,                            // nome do arquivo com nome do modelo
-        true                                // salvar como PNG
-      ]);
-
-      const gallery = result && result.data && result.data[0];
-      if(!gallery || !gallery.length){
-        throw new Error('O servidor não retornou nenhuma imagem. Tente novamente.');
-      }
-      const lastItem = gallery[gallery.length - 1];
-      const imageUrl = lastItem?.image?.url || lastItem?.url || (typeof lastItem === 'string' ? lastItem : null);
-      if(!imageUrl){
-        throw new Error('Não consegui ler a imagem restaurada na resposta do servidor.');
+      if(!response.ok){
+        const errText = await response.text();
+        throw new Error(`Erro ${response.status}: ${errText.slice(0, 200)}`);
       }
 
-      // baixa a imagem resultante e converte para data URL (pra poder baixar/usar no carrossel)
-      const imgResp = await fetch(imageUrl);
-      const imgBlobResult = await imgResp.blob();
-      aiEnhancedDataUrl = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(imgBlobResult);
-      });
+      const data = await response.json();
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const imagePart = parts.find(p => p.inline_data || p.inlineData);
+      const inline = imagePart?.inline_data || imagePart?.inlineData;
 
+      if(!inline?.data){
+        throw new Error('A resposta não trouxe uma imagem. Tente novamente ou revise sua chave/cota.');
+      }
+
+      const mime = inline.mime_type || inline.mimeType || 'image/png';
+      aiEnhancedDataUrl = `data:${mime};base64,${inline.data}`;
       aiBeforeImg.src = originalImage.src;
       aiAfterImg.src = aiEnhancedDataUrl;
       aiCompareWrap.style.display = 'grid';
       aiResultActions.style.display = 'flex';
       aiStatus.textContent = 'Pronto!';
     } catch(err){
-      console.error('Erro GFPGAN (Hugging Face):', err);
+      console.error('Erro Gemini:', err);
       aiStatus.textContent = 'Não foi possível melhorar a foto: ' + err.message;
     } finally{
+      aiEnhanceBtn.disabled = false;
       aiEnhanceBtn.textContent = 'Melhorar rosto com IA';
       updateAiButtonState();
     }
