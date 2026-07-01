@@ -404,56 +404,17 @@
 
 <div class="enhancer">
   <div class="enhancer-card">
-    <h2>MELHORAR UMA FOTO</h2>
-    <p class="desc">Escolha uma foto antiga ou borrada para aumentar nitidez, contraste e resolução, direto no navegador.</p>
+    <h2>MELHORAR ROSTO COM IA (GEMINI)</h2>
+    <p class="desc">Essa opção usa o modelo de imagem do Google Gemini pra reconstruir e melhorar pele, olhos e detalhes do rosto de verdade — estilo Remini. Precisa de uma chave de API gratuita/paga do Google (pegue em <span style="color:var(--cyan);">aistudio.google.com/apikey</span>).</p>
 
     <label class="upload-zone" id="uploadZone">
       <span id="uploadLabel">Clique para escolher uma foto</span>
       <input type="file" id="fileInput" accept="image/*">
     </label>
 
-    <div class="controls">
-      <label>Nitidez
-        <input type="range" id="sharpRange" min="0" max="100" value="55">
-      </label>
-      <label>Ampliação
-        <select id="scaleSelect">
-          <option value="1">Original</option>
-          <option value="2" selected>2x</option>
-          <option value="3">3x</option>
-        </select>
-      </label>
-    </div>
-
-    <button class="action" id="enhanceBtn" disabled>Melhorar foto</button>
-
-    <div class="compare" id="compareWrap" style="display:none;">
-      <figure>
-        <img id="beforeImg" alt="Antes">
-        <figcaption>Antes</figcaption>
-      </figure>
-      <figure>
-        <img id="afterImg" alt="Depois">
-        <figcaption>Depois</figcaption>
-      </figure>
-    </div>
-
-    <div class="result-actions" id="resultActions" style="display:none;">
-      <button class="action" id="downloadBtn">Baixar foto melhorada</button>
-      <button class="ghost" id="addToGalleryBtn">Adicionar ao carrossel</button>
-    </div>
-
-    <p class="note">Isso aplica nitidez, contraste e ampliação por algoritmo no próprio navegador — não é reconstrução por IA generativa (tipo Remini), então não inventa detalhes que não existem na foto original.</p>
-  </div>
-
-  <div class="enhancer-card" style="margin-top:1.6rem;">
-    <h2>MELHORAR ROSTO COM IA (GEMINI)</h2>
-    <p class="desc">Essa opção usa o modelo de imagem do Google Gemini pra reconstruir e melhorar pele, olhos e detalhes do rosto de verdade — estilo Remini. Precisa de uma chave de API gratuita/paga do Google.</p>
-
-    <div class="controls" style="margin-bottom:1rem;">
-      <label style="width:100%; max-width:420px;">Chave da API Gemini
-        <input type="password" id="geminiKeyInput" placeholder="Cole sua chave aqui" style="width:100%; background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:.5rem .7rem; font-family:'Rajdhani', sans-serif;">
-      </label>
+    <div style="max-width:480px; margin:0 auto 1.4rem; text-align:left;">
+      <label for="geminiKeyInput" style="display:block; font-size:.85rem; color:var(--cyan); letter-spacing:.05em; margin-bottom:.5rem; font-family:'Orbitron', sans-serif; text-transform:uppercase;">Cole sua chave da API Gemini aqui</label>
+      <input type="text" id="geminiKeyInput" placeholder="AIzaSy..." style="width:100%; background:#040810; color:var(--text); border:1.5px solid var(--cyan); border-radius:8px; padding:.9rem 1rem; font-size:1rem; font-family:'Rajdhani', sans-serif; outline:none;">
     </div>
     <button class="ghost" id="saveKeyBtn" style="margin-bottom:1.6rem;">Salvar chave neste navegador</button>
 
@@ -479,7 +440,7 @@
 
     <p id="aiStatus" class="note" style="min-height:1.2em;"></p>
 
-    <p class="note">Use a mesma foto escolhida lá em cima. Pegue sua chave gratuita em <span style="color:var(--cyan);">aistudio.google.com/apikey</span>. A chave fica salva só no seu navegador (localStorage) e é enviada direto do seu navegador para o Google — não passa por nós. Não compartilhe esse arquivo com a chave salva, e evite usar fotos de outras pessoas sem o consentimento delas. Imagens geradas por IA podem alterar levemente a aparência real.</p>
+    <p class="note">A chave fica salva só no seu navegador (localStorage) e é enviada direto do seu navegador para o Google — não passa por nós. Não compartilhe esse arquivo com a chave salva, e evite usar fotos de outras pessoas sem o consentimento delas. Imagens geradas por IA podem alterar levemente a aparência real.</p>
   </div>
 </div>
 
@@ -580,21 +541,11 @@
     if(e.target === lightbox) lightbox.classList.remove('open');
   });
 
-  // ====== MELHORADOR DE FOTO (nitidez + contraste + ampliação, 100% no navegador) ======
+  // ====== UPLOAD DE FOTO (usado pela melhoria com IA) ======
   const fileInput = document.getElementById('fileInput');
   const uploadLabel = document.getElementById('uploadLabel');
-  const enhanceBtn = document.getElementById('enhanceBtn');
-  const sharpRange = document.getElementById('sharpRange');
-  const scaleSelect = document.getElementById('scaleSelect');
-  const compareWrap = document.getElementById('compareWrap');
-  const beforeImg = document.getElementById('beforeImg');
-  const afterImg = document.getElementById('afterImg');
-  const resultActions = document.getElementById('resultActions');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const addToGalleryBtn = document.getElementById('addToGalleryBtn');
 
   let originalImage = null;
-  let enhancedDataUrl = null;
 
   fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
@@ -605,105 +556,13 @@
       const img = new Image();
       img.onload = () => {
         originalImage = img;
-        beforeImg.src = img.src;
-        enhanceBtn.disabled = false;
-        compareWrap.style.display = 'none';
-        resultActions.style.display = 'none';
+        aiCompareWrap.style.display = 'none';
+        aiResultActions.style.display = 'none';
         updateAiButtonState();
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
-  });
-
-  enhanceBtn.addEventListener('click', () => {
-    if(!originalImage) return;
-    const scale = parseFloat(scaleSelect.value);
-    const sharpAmount = parseInt(sharpRange.value, 10) / 100;
-
-    const w = originalImage.naturalWidth * scale;
-    const h = originalImage.naturalHeight * scale;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(originalImage, 0, 0, w, h);
-
-    ctx.filter = 'contrast(1.08) saturate(1.06)';
-    ctx.drawImage(canvas, 0, 0);
-    ctx.filter = 'none';
-
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const sharpened = applyUnsharpMask(imageData, sharpAmount);
-    ctx.putImageData(sharpened, 0, 0);
-
-    enhancedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    afterImg.src = enhancedDataUrl;
-    compareWrap.style.display = 'grid';
-    resultActions.style.display = 'flex';
-  });
-
-  function applyUnsharpMask(imageData, amount){
-    const { width, height, data } = imageData;
-    const src = new Uint8ClampedArray(data);
-    const blurred = boxBlur(src, width, height);
-    const out = new Uint8ClampedArray(data.length);
-
-    for(let i = 0; i < data.length; i += 4){
-      for(let c = 0; c < 3; c++){
-        const orig = src[i + c];
-        const blur = blurred[i + c];
-        const diff = orig - blur;
-        out[i + c] = orig + diff * amount * 2.2;
-      }
-      out[i + 3] = src[i + 3];
-    }
-    return new ImageData(out, width, height);
-  }
-
-  function boxBlur(data, width, height){
-    const out = new Uint8ClampedArray(data.length);
-    const r = 1;
-    for(let y = 0; y < height; y++){
-      for(let x = 0; x < width; x++){
-        let sr = 0, sg = 0, sb = 0, sa = 0, count = 0;
-        for(let dy = -r; dy <= r; dy++){
-          for(let dx = -r; dx <= r; dx++){
-            const nx = x + dx, ny = y + dy;
-            if(nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            const idx = (ny * width + nx) * 4;
-            sr += data[idx]; sg += data[idx+1]; sb += data[idx+2]; sa += data[idx+3];
-            count++;
-          }
-        }
-        const idx = (y * width + x) * 4;
-        out[idx] = sr / count;
-        out[idx+1] = sg / count;
-        out[idx+2] = sb / count;
-        out[idx+3] = sa / count;
-      }
-    }
-    return out;
-  }
-
-  downloadBtn.addEventListener('click', () => {
-    if(!enhancedDataUrl) return;
-    const a = document.createElement('a');
-    a.href = enhancedDataUrl;
-    a.download = 'foto-melhorada.jpg';
-    a.click();
-  });
-
-  addToGalleryBtn.addEventListener('click', () => {
-    if(!enhancedDataUrl) return;
-    fotos.push({ src: enhancedDataUrl, legenda: '' });
-    buildStage();
-    goTo(fotos.length - 1);
-    addToGalleryBtn.textContent = 'Adicionada ao carrossel ✓';
-    addToGalleryBtn.disabled = true;
   });
 
   // ====== MELHORAR ROSTO COM IA (Gemini API) ======
